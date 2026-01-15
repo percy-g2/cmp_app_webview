@@ -4,71 +4,69 @@ A Kotlin Multiplatform mobile application that displays TradingView charts for c
 
 ## Architecture Overview
 
-This application follows a **Kotlin Multiplatform Mobile (KMM)** architecture pattern, sharing business logic and UI code across Android and iOS platforms while leveraging platform-specific WebView implementations.
+This application follows a **Kotlin Multiplatform Mobile (KMM)** architecture with shared Compose UI and platform-specific WebView implementations. Android hosts the shared UI in a Compose `Activity`, while iOS hosts it inside a SwiftUI app via a `UIViewControllerRepresentable` bridge.
 
 ### Project Structure
 
-* [/composeApp](./composeApp/src) contains the shared Compose Multiplatform code:
-  - [commonMain](./composeApp/src/commonMain/kotlin) - Shared code for all platforms
-  - [androidMain](./composeApp/src/androidMain/kotlin) - Android-specific implementations
-  - [iosMain](./composeApp/src/iosMain/kotlin) - iOS-specific implementations
+* [/composeApp](./composeApp/src) contains the Kotlin Multiplatform code:
+  - [commonMain](./composeApp/src/commonMain/kotlin) - Shared Compose UI and abstractions
+  - [androidMain](./composeApp/src/androidMain/kotlin) - Android `actual` implementations
+  - [iosMain](./composeApp/src/iosMain/kotlin) - iOS `actual` implementations
 
-* [/iosApp](./iosApp/iosApp) contains the iOS application entry point and SwiftUI integration
+* [/iosApp](./iosApp/iosApp) contains the SwiftUI host app for iOS
 
 ### Architecture Layers
 
-#### 1. **Presentation Layer** (`commonMain/kotlin/com/androdevlinux/webview/`)
+#### 1. **App Entry Points**
+   - **Android** (`androidMain/kotlin/com/androdevlinux/webview/MainActivity.kt`)
+     - `MainActivity` hosts Compose and calls `App()`
+   - **iOS** (`iosApp/iosApp/ContentView.swift`)
+     - SwiftUI `ContentView` embeds `MainViewController()` from Kotlin via `UIViewControllerRepresentable`
+   - **Shared UI host** (`iosMain/kotlin/com/androdevlinux/webview/MainViewController.kt`)
+     - `MainViewController()` creates the Compose UI for iOS
+
+#### 2. **Presentation Layer** (`commonMain/kotlin/com/androdevlinux/webview/`)
    - **App.kt**: Main composable with Material 3 UI
-     - Tab-based navigation for crypto pairs (BTC, ETH, SOL, BNB)
-     - Theme management (Light/Dark/System)
-     - Top app bar with theme toggle
-     - Bottom navigation bar
-     - Loading and error state handling
-   
-   - **ThemeUtils.kt**: Platform-agnostic theme detection
-     - `getSystemDarkTheme()`: Expect function for platform-specific theme detection
+     - Tab navigation for crypto pairs (BTC, ETH, SOL, BNB)
+     - Theme management (Light/Dark/System) and TradingView theme parameter
+     - Loading and error state handling from WebView state callbacks
+   - **ThemeUtils.kt**: Expect/actual system theme detection
+     - `getSystemDarkTheme()` implemented per platform
 
-#### 2. **WebView Abstraction Layer** (`commonMain/kotlin/com/androdevlinux/webview/webview/`)
-   
-   **WebViewState.kt**
-   - `WebViewLoadingState`: Enum for loading states (IDLE, LOADING, LOADED, ERROR)
-   - `WebViewState`: Data class holding webview state (URL, navigation, errors)
-   
-   **WebViewController.kt** (expect class)
-   - Common interface for webview operations across platforms
-   - Methods: `loadUrl()`, `evaluateJavaScript()`, `addJavaScriptInterface()`, `reload()`, `goBack()`, `goForward()`, etc.
-   - Factory function: `createWebViewController()`
-   
-   **WebViewComposable.kt**
-   - `WebViewComposable`: High-level Compose component
-   - Manages WebViewController lifecycle
-   - Handles JavaScript interface registration
-   - Provides state change callbacks
+#### 3. **WebView Abstraction Layer** (`commonMain/kotlin/com/androdevlinux/webview/webview/`)
+   - **WebViewState.kt**
+     - `WebViewLoadingState`: `IDLE`, `LOADING`, `LOADED`, `ERROR`
+     - `WebViewState`: URL, navigation flags, error message
+   - **WebViewController.kt** (expect class)
+     - Common interface for WebView operations (`loadUrl`, `evaluateJavaScript`, navigation, etc.)
+     - Factory: `createWebViewController()`
+   - **WebViewComposable.kt**
+     - High-level Compose component that wires `PlatformWebView` and `WebViewController`
+     - Registers JavaScript interfaces and emits `WebViewState` updates
+     - Uses `PlatformWebView` expect/actual composable
 
-#### 3. **Platform-Specific Implementations**
+#### 4. **Platform-Specific Implementations**
 
    **Android** (`androidMain/kotlin/com/androdevlinux/webview/webview/AndroidWebView.kt`)
-   - Uses Android's `WebView` component
-   - `AndroidView` composable for Compose integration
+   - Uses Android `WebView` inside `AndroidView`
    - JavaScript bridge via `@JavascriptInterface`
-   - WebViewClient and WebChromeClient for navigation and error handling
-   - Features: JavaScript enabled, DOM storage, zoom controls, mixed content support
-   
+   - `WebViewClient`/`WebChromeClient` for navigation and error handling
+   - Web settings: JS, DOM storage, zoom, mixed content support
+
    **iOS** (`iosMain/kotlin/com/androdevlinux/webview/webview/IOSWebView.kt`)
-   - Uses `WKWebView` from WebKit framework
-   - `UIKitView` composable for Compose integration
+   - Uses `WKWebView` inside `UIKitView`
    - JavaScript bridge via `WKScriptMessageHandler`
-   - WKNavigationDelegate for navigation and error handling
-   - Injects JavaScript bridge code for native communication
+   - `WKNavigationDelegate` for navigation and error handling
+   - Injected bridge script for native callbacks
 
 ### Data Flow
 
 ```
 User Interaction (Tab Selection/Theme Toggle)
     ↓
-App.kt (State Management)
+App.kt (State + Theme)
     ↓
-WebViewComposable (URL Change)
+WebViewComposable (URL load + state callbacks)
     ↓
 WebViewController (Platform-specific)
     ↓
