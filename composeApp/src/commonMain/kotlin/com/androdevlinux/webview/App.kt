@@ -1,5 +1,6 @@
 package com.androdevlinux.webview
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -9,6 +10,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.androdevlinux.webview.webview.WebViewComposable
 import com.androdevlinux.webview.webview.WebViewState
 
@@ -19,25 +21,31 @@ enum class TabItem(val title: String, val symbol: String) {
     BNB("BNB/USDT", "BINANCE:BNBUSDT")
 }
 
+enum class ThemeMode(val displayName: String) {
+    LIGHT("Light"),
+    DARK("Dark"),
+    SYSTEM("System")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 @Preview
 fun App() {
-    // Theme state - can be Light, Dark, or System
-    var darkTheme by remember { mutableStateOf(false) }
-    var useSystemTheme by remember { mutableStateOf(true) }
+    // Theme state management
+    var themeMode by remember { mutableStateOf(ThemeMode.SYSTEM) }
     
-    // Get system theme preference (expect function for platform-specific implementation)
-    // This will automatically recompose when system theme changes
+    // Get system theme preference
     val systemIsDark = getSystemDarkTheme()
     
     // Determine if we should use dark theme
-    // If using system theme, follow system preference; otherwise use manual toggle
-    val isDarkTheme = if (useSystemTheme) {
-        systemIsDark
-    } else {
-        darkTheme
+    val isDarkTheme = when (themeMode) {
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> systemIsDark
     }
+    
+    // Settings dialog state
+    var showSettingsDialog by remember { mutableStateOf(false) }
     
     MaterialTheme(
         colorScheme = if (isDarkTheme) {
@@ -59,42 +67,37 @@ fun App() {
                     title = {
                         Text(
                             text = "TradingView Charts",
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
                         )
                     },
                     actions = {
-                        // Theme toggle button
+                        // Settings button
                         IconButton(
-                            onClick = {
-                                if (useSystemTheme) {
-                                    useSystemTheme = false
-                                    darkTheme = !systemIsDark
-                                } else {
-                                    darkTheme = !darkTheme
-                                }
-                            }
+                            onClick = { showSettingsDialog = true }
                         ) {
                             Text(
-                                text = if (isDarkTheme) "☀️" else "🌙",
+                                text = "⚙️",
                                 style = MaterialTheme.typography.titleLarge
                             )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
             },
             bottomBar = {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     tabs.forEachIndexed { index, tab ->
                         NavigationBarItem(
                             icon = {
-                                // Simple icon placeholder - you can replace with actual icons if available
                                 Box(
                                     modifier = Modifier
                                         .size(24.dp)
@@ -116,7 +119,8 @@ fun App() {
                                 Text(
                                     text = tab.title,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelSmall
                                 ) 
                             },
                             selected = selectedTabIndex == index,
@@ -124,7 +128,9 @@ fun App() {
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer
                             )
                         )
                     }
@@ -194,6 +200,116 @@ fun App() {
                         }
                     )
                 )
+            }
+        }
+        
+        // Settings Dialog
+        if (showSettingsDialog) {
+            SettingsDialog(
+                currentThemeMode = themeMode,
+                onThemeModeSelected = { mode ->
+                    themeMode = mode
+                },
+                onDismiss = { showSettingsDialog = false }
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsDialog(
+    currentThemeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Dialog Title
+                Text(
+                    text = "Settings",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Divider()
+                
+                // Theme Section
+                Text(
+                    text = "Theme",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                // Theme Options
+                ThemeMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onThemeModeSelected(mode) }
+                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = when (mode) {
+                                    ThemeMode.LIGHT -> "☀️"
+                                    ThemeMode.DARK -> "🌙"
+                                    ThemeMode.SYSTEM -> "⚙️"
+                                },
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Text(
+                                text = mode.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        
+                        RadioButton(
+                            selected = currentThemeMode == mode,
+                            onClick = { onThemeModeSelected(mode) },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Close Button
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text(
+                        text = "Close",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
         }
     }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.interop.UIKitView
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.ObjCSignatureOverride
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLRequest
 import platform.WebKit.*
@@ -33,10 +34,23 @@ actual class WebViewController {
     private var stateCallback: ((WebViewState) -> Unit)? = null
     private val messageHandlers = mutableMapOf<String, JavaScriptMessageHandler>()
     private val pendingInterfaces = mutableMapOf<String, (String) -> Unit>()
+    private var isInitialized = false
     
     fun initialize(webView: WKWebView, stateCallback: ((WebViewState) -> Unit)?) {
+        // If already initialized with the same webview, skip
+        if (isInitialized && this.webView == webView) {
+            return
+        }
+        
+        // Clean up previous webview if it exists and is different
+        if (this.webView != null && this.webView != webView) {
+            cleanupWebView(this.webView!!)
+        }
+        
         this.webView = webView
         this.stateCallback = stateCallback
+        isInitialized = true
+        
         setupWebView(webView)
         
         // Register any pending interfaces
@@ -49,6 +63,17 @@ actual class WebViewController {
         updateState(WebViewLoadingState.IDLE, null)
     }
     
+    private fun cleanupWebView(webView: WKWebView) {
+        // Remove all message handlers from the old webview
+        messageHandlers.keys.forEach { name ->
+            try {
+                webView.configuration.userContentController.removeScriptMessageHandlerForName(name)
+            } catch (e: Exception) {
+                // Ignore errors during cleanup
+            }
+        }
+    }
+    
     private fun setupWebView(webView: WKWebView) {
         val configuration = webView.configuration
         configuration.preferences.javaScriptEnabled = true
@@ -56,6 +81,7 @@ actual class WebViewController {
         
         // Set navigation delegate
         webView.navigationDelegate = object : NSObject(), WKNavigationDelegateProtocol {
+            @ObjCSignatureOverride
             override fun webView(
                 webView: WKWebView,
                 didStartProvisionalNavigation: WKNavigation?
@@ -64,6 +90,7 @@ actual class WebViewController {
                 updateState(WebViewLoadingState.LOADING, url)
             }
             
+            @ObjCSignatureOverride
             override fun webView(
                 webView: WKWebView,
                 didFinishNavigation: WKNavigation?
@@ -72,6 +99,7 @@ actual class WebViewController {
                 updateState(WebViewLoadingState.LOADED, url)
             }
             
+            @ObjCSignatureOverride
             override fun webView(
                 webView: WKWebView,
                 didFailNavigation: WKNavigation?,
@@ -82,6 +110,7 @@ actual class WebViewController {
                 updateState(WebViewLoadingState.ERROR, url, errorMsg)
             }
             
+            @ObjCSignatureOverride
             override fun webView(
                 webView: WKWebView,
                 didFailProvisionalNavigation: WKNavigation?,
@@ -128,10 +157,19 @@ actual class WebViewController {
     
     actual fun addJavaScriptInterface(name: String, handler: (String) -> Unit) {
         if (webView != null) {
+            val userContentController = webView?.configuration?.userContentController ?: return
+            
+            // Remove existing handler if it exists to avoid duplicate registration
+            if (messageHandlers.containsKey(name)) {
+                userContentController.removeScriptMessageHandlerForName(name)
+                messageHandlers.remove(name)
+            }
+            
             val messageHandler = JavaScriptMessageHandler(handler)
             messageHandlers[name] = messageHandler
             
-            webView?.configuration?.userContentController?.addScriptMessageHandler(
+            // Add the script message handler
+            userContentController.addScriptMessageHandler(
                 messageHandler,
                 name
             )
@@ -151,7 +189,7 @@ actual class WebViewController {
                 forMainFrameOnly = false
             )
             
-            webView?.configuration?.userContentController?.addUserScript(wkScript)
+            userContentController.addUserScript(wkScript)
         } else {
             // Store for later registration when webview is initialized
             pendingInterfaces[name] = handler
@@ -183,13 +221,16 @@ actual class WebViewController {
     }
     
     actual fun dispose() {
-        // Remove message handlers
-        messageHandlers.forEach { (name, handler) ->
-            webView?.configuration?.userContentController?.removeScriptMessageHandlerForName(name)
+        // Remove message handlers before clearing
+        val webViewToCleanup = webView
+        if (webViewToCleanup != null) {
+            cleanupWebView(webViewToCleanup)
         }
         messageHandlers.clear()
+        pendingInterfaces.clear()
         webView = null
         stateCallback = null
+        isInitialized = false
     }
 }
 
@@ -216,7 +257,8 @@ actual fun PlatformWebView(
         },
         modifier = modifier.fillMaxSize(),
         update = { webView ->
-            // Update if needed
+            // Update callback if needed (webview instance should remain the same)
+            controller.initialize(webView, onStateChanged)
         }
     )
 }

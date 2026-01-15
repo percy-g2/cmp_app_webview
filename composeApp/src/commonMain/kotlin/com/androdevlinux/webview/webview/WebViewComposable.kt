@@ -27,13 +27,20 @@ fun WebViewComposable(
     val state = remember { mutableStateOf(WebViewState()) }
     val controller = remember { createWebViewController() }
     var isInitialized by remember { mutableStateOf(false) }
+    val registeredInterfaces = remember { mutableSetOf<String>() }
     
     // Register JavaScript interfaces when initialized
     LaunchedEffect(javascriptInterfaces, isInitialized) {
         if (isInitialized) {
             javascriptInterfaces.forEach { (name, handler) ->
-                controller.addJavaScriptInterface(name, handler)
+                // Only register if not already registered
+                if (!registeredInterfaces.contains(name)) {
+                    controller.addJavaScriptInterface(name, handler)
+                    registeredInterfaces.add(name)
+                }
             }
+            // Remove interfaces that are no longer in the map
+            registeredInterfaces.removeAll { it !in javascriptInterfaces.keys }
         }
     }
     
