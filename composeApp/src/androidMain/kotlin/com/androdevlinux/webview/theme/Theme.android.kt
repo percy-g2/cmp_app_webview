@@ -1,4 +1,4 @@
-package com.androdevlinux.webview
+package com.androdevlinux.webview.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
@@ -7,5 +7,5 @@ import androidx.compose.ui.platform.LocalConfiguration
 actual fun getSystemDarkTheme(): Boolean {
     val configuration = LocalConfiguration.current
     return (configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        android.content.res.Configuration.UI_MODE_NIGHT_YES
 }
