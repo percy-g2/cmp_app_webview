@@ -27,7 +27,7 @@ enum class TabItem(val title: String, val symbol: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 @Preview
-fun App() {
+fun App(onThemeChanged: (Boolean) -> Unit = {}) {
     // Theme state management
     var themeMode by remember { mutableStateOf(ThemeMode.SYSTEM) }
     
@@ -35,6 +35,9 @@ fun App() {
     var showSettingsDialog by remember { mutableStateOf(false) }
     
     AppTheme(themeMode) { isDarkTheme ->
+        SideEffect {
+            onThemeChanged(isDarkTheme)
+        }
         var selectedTabIndex by remember { mutableStateOf(0) }
         var webViewState by remember { mutableStateOf<WebViewState?>(null) }
         val tabs = remember { TabItem.entries }
