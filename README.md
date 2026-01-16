@@ -46,7 +46,7 @@ graph TB
         B -->|Uses| C[WebViewComposable]
         C -->|Creates| D[AndroidWebViewController]
         D -->|Wraps| E[Android WebView]
-        E -->|@JavascriptInterface| F[JavaScriptBridge]
+        E -->|JavascriptInterface| F[JavaScriptBridge]
         E -->|WebViewClient| G[Navigation Events]
     end
     
