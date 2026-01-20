@@ -1,6 +1,7 @@
 package com.androdevlinux.webview.webview
 
 import android.annotation.SuppressLint
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -86,6 +87,11 @@ actual class WebViewController {
             allowFileAccess = true
             allowContentAccess = true
         }
+        
+        // Enable cookie support
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        cookieManager.setAcceptThirdPartyCookies(webView, true)
         
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
@@ -185,6 +191,42 @@ actual class WebViewController {
     
     actual fun getCurrentUrl(): String? {
         return webView?.url
+    }
+    
+    actual fun setCookie(url: String, cookie: String) {
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setCookie(url, cookie)
+        cookieManager.flush()
+    }
+    
+    actual fun getCookies(url: String): String? {
+        val cookieManager = CookieManager.getInstance()
+        return cookieManager.getCookie(url)
+    }
+    
+    actual fun clearCookies() {
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.removeAllCookies(null)
+        cookieManager.flush()
+    }
+    
+    actual fun removeCookie(url: String, cookieName: String) {
+        val cookieManager = CookieManager.getInstance()
+        // Android CookieManager doesn't have a direct way to remove a single cookie
+        // The best approach is to set the cookie with an expired date (past date)
+        // This effectively removes the cookie
+        try {
+            val nsUrl = java.net.URL(url)
+            val domain = nsUrl.host
+            // Set cookie with expired date to remove it
+            val expiredCookie = "$cookieName=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=$domain"
+            cookieManager.setCookie(url, expiredCookie)
+            cookieManager.flush()
+        } catch (e: Exception) {
+            // Fallback: try to remove by setting empty value
+            cookieManager.setCookie(url, "$cookieName=")
+            cookieManager.flush()
+        }
     }
     
     actual fun dispose() {

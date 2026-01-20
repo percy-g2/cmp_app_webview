@@ -54,6 +54,32 @@ expect class WebViewController {
     fun getCurrentUrl(): String?
     
     /**
+     * Set a cookie for a given URL
+     * @param url The URL domain for the cookie
+     * @param cookie The cookie string (e.g., "name=value; path=/; domain=.example.com")
+     */
+    fun setCookie(url: String, cookie: String)
+    
+    /**
+     * Get cookies for a given URL
+     * @param url The URL to get cookies for
+     * @return Cookie string or null if no cookies found
+     */
+    fun getCookies(url: String): String?
+    
+    /**
+     * Clear all cookies
+     */
+    fun clearCookies()
+    
+    /**
+     * Remove a specific cookie by name and URL
+     * @param url The URL domain for the cookie
+     * @param cookieName The name of the cookie to remove
+     */
+    fun removeCookie(url: String, cookieName: String)
+    
+    /**
      * Cleanup resources
      */
     fun dispose()

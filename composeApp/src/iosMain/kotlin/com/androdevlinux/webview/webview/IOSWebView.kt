@@ -6,8 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.interop.UIKitView
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCSignatureOverride
-import platform.Foundation.NSURL
-import platform.Foundation.NSURLRequest
+import platform.Foundation.*
 import platform.WebKit.*
 import platform.darwin.NSObject
 
@@ -218,6 +217,107 @@ actual class WebViewController {
     
     actual fun getCurrentUrl(): String? {
         return webView?.URL?.absoluteString
+    }
+    
+    actual fun setCookie(url: String, cookie: String) {
+        val webView = this.webView ?: return
+        val cookieStore = webView.configuration.websiteDataStore.httpCookieStore
+        
+        // Parse cookie string (format: "name=value; path=/; domain=.example.com")
+        val cookieParts = cookie.split(";").map { it.trim() }
+        val nameValue = cookieParts.firstOrNull()?.split("=") ?: return
+        val cookieName = nameValue.firstOrNull() ?: return
+        val cookieValue = nameValue.getOrNull(1) ?: ""
+        
+        // Create NSURL from the provided URL
+        val nsUrl = NSURL.URLWithString(url) ?: return
+        
+        // Create HTTPCookie
+        val cookieProperties = mutableMapOf<String, Any>()
+        cookieProperties[NSHTTPCookieName] = cookieName
+        cookieProperties[NSHTTPCookieValue] = cookieValue
+        cookieProperties[NSHTTPCookieDomain] = nsUrl.host ?: ""
+        cookieProperties[NSHTTPCookiePath] = nsUrl.path ?: "/"
+        
+        // Parse additional properties from cookie string
+        cookieParts.drop(1).forEach { part ->
+            when {
+                part.startsWith("path=", ignoreCase = true) -> {
+                    cookieProperties[NSHTTPCookiePath] = part.substringAfter("=").trim()
+                }
+                part.startsWith("domain=", ignoreCase = true) -> {
+                    cookieProperties[NSHTTPCookieDomain] = part.substringAfter("=").trim()
+                }
+                part.startsWith("expires=", ignoreCase = true) -> {
+                    // Handle expiration if needed
+                }
+                part.equals("secure", ignoreCase = true) -> {
+                    cookieProperties[NSHTTPCookieSecure] = true
+                }
+                part.startsWith("httponly", ignoreCase = true) -> {
+                    cookieProperties[NSHTTPCookieDiscard] = true
+                }
+            }
+        }
+        
+        val httpCookie = NSHTTPCookie.cookieWithProperties(cookieProperties) ?: return
+        
+        cookieStore.setCookie(httpCookie) { }
+    }
+    
+    actual fun getCookies(url: String): String? {
+        val webView = this.webView ?: return null
+        val cookieStore = webView.configuration.websiteDataStore.httpCookieStore
+        val nsUrl = NSURL.URLWithString(url) ?: return null
+        
+        var cookiesString: String? = null
+        val semaphore = platform.darwin.dispatch_semaphore_create(0)
+        
+        cookieStore.getAllCookies { cookies ->
+            val relevantCookies = cookies?.filter { cookie ->
+                val cookieDomain = cookie.domain as? String ?: ""
+                val urlHost = nsUrl.host as? String ?: ""
+                cookieDomain.contains(urlHost) || urlHost.contains(cookieDomain.removePrefix("."))
+            }
+            
+            cookiesString = relevantCookies?.joinToString("; ") { cookie ->
+                "${cookie.name}=${cookie.value}"
+            }
+            
+            platform.darwin.dispatch_semaphore_signal(semaphore)
+        }
+        
+        platform.darwin.dispatch_semaphore_wait(semaphore, platform.darwin.DISPATCH_TIME_FOREVER)
+        return cookiesString
+    }
+    
+    actual fun clearCookies() {
+        val webView = this.webView ?: return
+        val cookieStore = webView.configuration.websiteDataStore.httpCookieStore
+        
+        cookieStore.getAllCookies { cookies ->
+            cookies?.forEach { cookie ->
+                cookieStore.deleteCookie(cookie) { }
+            }
+        }
+    }
+    
+    actual fun removeCookie(url: String, cookieName: String) {
+        val webView = this.webView ?: return
+        val cookieStore = webView.configuration.websiteDataStore.httpCookieStore
+        val nsUrl = NSURL.URLWithString(url) ?: return
+        
+        cookieStore.getAllCookies { cookies ->
+            cookies?.filter { cookie ->
+                cookie.name == cookieName && run {
+                    val cookieDomain = cookie.domain as? String ?: ""
+                    val urlHost = nsUrl.host as? String ?: ""
+                    cookieDomain.contains(urlHost) || urlHost.contains(cookieDomain.removePrefix("."))
+                }
+            }?.forEach { cookie ->
+                cookieStore.deleteCookie(cookie) { }
+            }
+        }
     }
     
     actual fun dispose() {
