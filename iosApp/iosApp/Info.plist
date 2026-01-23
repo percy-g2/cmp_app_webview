@@ -4,11 +4,8 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-	<key>WKAppBoundDomains</key>
-	<array>
-		<string>tradingview.com</string>
-		<string>www.tradingview.com</string>
-	</array>
+	<!-- WKAppBoundDomains removed - it was blocking JavaScript injection -->
+	<!-- Security is handled via navigation delegate instead -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -28,5 +25,9 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>This app needs access to save images to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to save images to your photo library.</string>
 </dict>
 </plist>
